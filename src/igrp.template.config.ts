@@ -13,8 +13,7 @@ export function createConfig(config: IGRPLayoutConfigArgs): Promise<IGRPConfigAr
   const apps = getMockApps().mockApps;
 
   function basePath(bp: string) {
-    if (!bp) return '/';
-
+    if (!bp) return '/api/auth';
     if (bp.startsWith('/') && bp.endsWith('/')) return `${bp}api/auth`;
     if (bp.startsWith('/') && !bp.endsWith('/')) return `${bp}/api/auth/`;
     if (!bp.startsWith('/') && bp.endsWith('/')) return `/${bp}api/auth`;

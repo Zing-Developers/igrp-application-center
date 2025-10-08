@@ -41,8 +41,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async redirect({ url, baseUrl }) {
       const basePath = process.env.IGRP_APP_BASE_PATH || '';
+      
+      console.log(':: AUTH REDIRECT DEBUG ::', { url, baseUrl, basePath });
+      
+      // Handle relative paths
       if (url.startsWith('/')) return `${baseUrl}${basePath}${url}`;
 
+      // Handle full URLs that start with baseUrl
       if (url.startsWith(baseUrl)) {
         const hasBasePath = baseUrl.includes(basePath);
         if (hasBasePath) return url;
@@ -51,10 +56,17 @@ export const authOptions: NextAuthOptions = {
         return `${baseUrl}${basePath}${_url}`;
       }
 
+      // Default fallback
       return `${baseUrl}${basePath}`;
     },
     async jwt({ token, user, account, profile }) {
       if (account) {
+        console.log(':: JWT CALLBACK - NEW SIGN IN ::', { 
+          hasUser: !!user, 
+          hasAccount: !!account,
+          provider: account.provider 
+        });
+        
         if (user && !('user' in token)) {
           token.user = {
             id: token.sub ?? user.id ?? undefined,
