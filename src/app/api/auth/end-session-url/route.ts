@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession, getToken } from '@igrp/framework-next-auth';
-import { authOptions, buildKeycloakEndSessionUrl } from '@/lib/auth-options';
+import { getToken } from '@igrp/framework-next-auth';
+import { buildKeycloakEndSessionUrl } from '@/lib/auth-options';
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  const jwtLike = { idToken: session?.idToken };
+export async function GET(req: NextRequest) {
+  const token = await getToken({ req });
 
   try {
-    const url = buildKeycloakEndSessionUrl(jwtLike);
+    const url = await buildKeycloakEndSessionUrl(token);
     return NextResponse.json({ url });
   } catch (e) {
     console.error(e);

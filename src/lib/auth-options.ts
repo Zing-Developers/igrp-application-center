@@ -74,7 +74,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email ?? profile?.email ?? null,
           };
         }
-        token.idToken = account.id_token;
+        // Store only accessToken, not idToken (reduces JWT size significantly)
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
@@ -104,7 +104,6 @@ export const authOptions: NextAuthOptions = {
         const updatedToken: JWT = {
           ...token,
           user: token.user,
-          idToken: tokens.id_token,
           accessToken: tokens.access_token,
           expiresAt: Math.floor(Date.now() / 1000 + Number(tokens.expires_in)),
           refreshToken: tokens.refresh_token || token.refreshToken,
@@ -120,7 +119,6 @@ export const authOptions: NextAuthOptions = {
       session.user = token.user as Session['user'];
       session.accessToken = token.accessToken;
       session.error = token.error;
-      session.idToken = token.idToken;
       session.expiresAt = token.expiresAt;
       return session;
     },
@@ -159,11 +157,10 @@ export async function requestRefreshOfAccessToken(token: JWT) {
   });
 }
 
-export function buildKeycloakEndSessionUrl(jwt: JWT) {
+export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
   const issuer = process.env.KEYCLOAK_ISSUER;
   if (!issuer) throw new Error('KEYCLOAK_ISSUER not set');
 
-  const idToken = jwt?.idToken as string | undefined;
   const loginUrl = '/login';
   const basePath = process.env.IGRP_APP_BASE_PATH || '';
   const postLogoutRedirectUri = process.env.NEXTAUTH_URL
@@ -172,13 +169,23 @@ export function buildKeycloakEndSessionUrl(jwt: JWT) {
 
   // Build URL safely - issuer is already checked above
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
-  if (!idToken) {
-    console.error('No your or not login, available for logout.');
-    nextRedirect(loginUrl);
+  
+  // Get fresh id_token for logout
+  if (jwt?.refreshToken) {
+    try {
+      const response = await requestRefreshOfAccessToken(jwt);
+      const tokens: TokenSet = await response.json();
+      if (response.ok && tokens.id_token) {
+        url.searchParams.set('id_token_hint', tokens.id_token);
+      }
+    } catch (error) {
+      console.error('Error getting id_token for logout:', error);
+    }
   }
-  url.searchParams.set('id_token_hint', idToken);
-  if (postLogoutRedirectUri)
+  
+  if (postLogoutRedirectUri) {
     url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
+  }
 
   return url.toString();
 }
