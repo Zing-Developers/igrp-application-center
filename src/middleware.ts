@@ -30,9 +30,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!token) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', request.url);
-    return NextResponse.redirect(loginUrl);
+    // Redirect directly to NextAuth signin which will invoke Keycloak
+    const basePath = process.env.IGRP_APP_BASE_PATH || '';
+    const signinUrl = new URL(`${basePath}/api/auth/signin`, request.url);
+    signinUrl.searchParams.set('callbackUrl', request.url);
+    return NextResponse.redirect(signinUrl);
   }
 
   if (token.error === 'RefreshAccessTokenError') {
