@@ -17,4 +17,4 @@ services:
       - IGRP_PREVIEW_MODE=false
       - NODE_ENV=production
     ports:
-      - "3001:3000"
+      - '3001:3000'

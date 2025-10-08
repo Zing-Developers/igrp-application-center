@@ -5,15 +5,16 @@ import { redirect as nextRedirect } from 'next/navigation';
 
 const isProd = process.env.NODE_ENV === 'production';
 const baseUrl = process.env.NEXTAUTH_URL ?? '';
-const url = new URL(baseUrl);
+// Handle empty URL during build time
+const url = baseUrl ? new URL(baseUrl) : { hostname: 'localhost' };
 const cookieDomain = isProd && url.hostname !== 'localhost' ? url.hostname : undefined;
 
 export const authOptions: NextAuthOptions = {
   providers: [
     KeycloakProvider({
-      clientId: process.env.KEYCLOAK_CLIENT_ID!,
-      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET!,
-      issuer: process.env.KEYCLOAK_ISSUER!,
+      clientId: process.env.KEYCLOAK_CLIENT_ID || '',
+      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET || '',
+      issuer: process.env.KEYCLOAK_ISSUER || '',
     }),
   ],
 
@@ -156,6 +157,7 @@ export function buildKeycloakEndSessionUrl(jwt: JWT) {
     ? `${process.env.NEXTAUTH_URL}${basePath}${loginUrl}`
     : undefined;
 
+  // Build URL safely - issuer is already checked above
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
   if (!idToken) {
     console.error('No your or not login, available for logout.');
