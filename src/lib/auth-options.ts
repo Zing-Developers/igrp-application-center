@@ -4,8 +4,17 @@ import KeycloakProvider from 'next-auth/providers/keycloak';
 
 const isProd = process.env.NODE_ENV === 'production';
 const baseUrl = process.env.NEXTAUTH_URL ?? '';
+
+// Validate and fix invalid URLs (like 0.0.0.0)
+const validBaseUrl = baseUrl.includes('0.0.0.0') 
+  ? (process.env.IGRP_APP_CENTER_URL || baseUrl) 
+  : baseUrl;
+
+console.log(':: AUTH OPTIONS - NEXTAUTH_URL:', baseUrl);
+console.log(':: AUTH OPTIONS - Valid URL:', validBaseUrl);
+
 // Handle empty URL during build time
-const url = baseUrl ? new URL(baseUrl) : { hostname: 'localhost' };
+const url = validBaseUrl ? new URL(validBaseUrl) : { hostname: 'localhost' };
 const cookieDomain = isProd && url.hostname !== 'localhost' ? url.hostname : undefined;
 
 export const authOptions: NextAuthOptions = {
@@ -30,29 +39,57 @@ export const authOptions: NextAuthOptions = {
       options: {
         httpOnly: true,
         sameSite: 'lax',
-        path: '/',
+        path: process.env.IGRP_APP_BASE_PATH || '/',
         secure: isProd,
         ...(cookieDomain ? { domain: cookieDomain } : {}),
       },
     },
   },
 
-  callbacks: {
-    async redirect({ url, baseUrl }) {
-      const basePath = process.env.IGRP_APP_BASE_PATH || '';
+  debug: process.env.NODE_ENV === 'development',
 
-      console.log(':: AUTH REDIRECT DEBUG ::', { url, baseUrl, basePath });
+  callbacks: {
+    async redirect({ url, baseUrl: nextAuthBaseUrl }) {
+      const basePath = process.env.IGRP_APP_BASE_PATH || '';
+      // Use validBaseUrl instead of baseUrl to handle 0.0.0.0
+      const baseUrl = validBaseUrl || nextAuthBaseUrl;
+
+      console.log(':: AUTH REDIRECT DEBUG ::', { url, baseUrl, nextAuthBaseUrl, basePath });
 
       // Handle relative paths
-      if (url.startsWith('/')) return `${baseUrl}${basePath}${url}`;
+      if (url.startsWith('/')) {
+        // Check if the relative path already has basePath
+        if (basePath && url.startsWith(basePath)) {
+          return `${baseUrl}${url}`;
+        }
+        return `${baseUrl}${basePath}${url}`;
+      }
 
       // Handle full URLs that start with baseUrl
       if (url.startsWith(baseUrl)) {
-        const hasBasePath = baseUrl.includes(basePath);
-        if (hasBasePath) return url;
-
-        const _url = url.replace(baseUrl, '');
-        return `${baseUrl}${basePath}${_url}`;
+        // Parse the URL to get the pathname
+        try {
+          const urlObj = new URL(url);
+          const pathname = urlObj.pathname;
+          
+          // Check if pathname already has basePath
+          if (basePath && pathname.startsWith(basePath)) {
+            console.log(':: AUTH REDIRECT - basePath already in URL, returning as-is');
+            return url;
+          }
+          
+          // Check if we need to add basePath
+          if (basePath && !pathname.startsWith(basePath)) {
+            console.log(':: AUTH REDIRECT - Adding basePath');
+            const _url = url.replace(baseUrl, '');
+            return `${baseUrl}${basePath}${_url}`;
+          }
+          
+          return url;
+        } catch (error) {
+          console.error(':: AUTH REDIRECT - Error parsing URL:', error);
+          return url;
+        }
       }
 
       // Default fallback

@@ -15,7 +15,12 @@ function isPublicPath(pathname: string) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) return NextResponse.next();
+  console.log(':: MIDDLEWARE - Path:', pathname);
+
+  if (isPublicPath(pathname)) {
+    console.log(':: MIDDLEWARE - Public path, allowing');
+    return NextResponse.next();
+  }
 
   const possibleCookieNames = ['__Secure-next-auth.session-token', 'next-auth.session-token'];
 
@@ -29,18 +34,31 @@ export async function middleware(request: NextRequest) {
     if (token) break;
   }
 
+  console.log(':: MIDDLEWARE - Has token:', !!token);
+
   if (!token) {
     // Redirect directly to NextAuth signin which will invoke Keycloak
     const basePath = process.env.IGRP_APP_BASE_PATH || '';
-    const signinUrl = new URL(`${basePath}/api/auth/signin`, request.url);
+    const signinPath = `${basePath}/api/auth/signin`;
+    
+    console.log(':: MIDDLEWARE - Redirecting to signin:', {
+      basePath,
+      signinPath,
+      callbackUrl: request.url,
+    });
+    
+    const signinUrl = new URL(signinPath, request.url);
     signinUrl.searchParams.set('callbackUrl', request.url);
+    
     return NextResponse.redirect(signinUrl);
   }
 
   if (token.error === 'RefreshAccessTokenError') {
+    console.log(':: MIDDLEWARE - Token refresh error, redirecting to logout');
     return NextResponse.redirect(new URL('/logout', request.url));
   }
 
+  console.log(':: MIDDLEWARE - Token valid, allowing request');
   return NextResponse.next();
 }
 
