@@ -93,16 +93,29 @@ export const authOptions: NextAuthOptions = {
   
   logger: {
     error(code, ...metadata) {
-      console.error(':: NEXTAUTH ERROR ::', code, JSON.stringify(metadata, null, 2));
+      console.error('');
+      console.error('========================================');
+      console.error(':: NEXTAUTH ERROR ::', code);
+      console.error('========================================');
+      try {
+        console.error(JSON.stringify(metadata, null, 2));
+      } catch (e) {
+        console.error(metadata);
+      }
+      console.error('========================================');
+      console.error('');
     },
     warn(code) {
       console.warn(':: NEXTAUTH WARN ::', code);
     },
     debug(code, ...metadata) {
-      if (code === 'OAUTH_CALLBACK_ERROR') {
-        console.error(':: NEXTAUTH OAUTH ERROR ::', JSON.stringify(metadata, null, 2));
-      } else {
-        console.log(':: NEXTAUTH DEBUG ::', code, metadata);
+      console.log(':: NEXTAUTH DEBUG ::', code);
+      if (metadata && metadata.length > 0) {
+        try {
+          console.log(JSON.stringify(metadata, null, 2));
+        } catch (e) {
+          console.log(metadata);
+        }
       }
     },
   },
