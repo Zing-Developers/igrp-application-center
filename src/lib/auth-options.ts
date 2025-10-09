@@ -50,6 +50,35 @@ console.log(':: AUTH OPTIONS - Valid URL:', validBaseUrl);
 console.log(':: AUTH OPTIONS - NODE_ENV:', process.env.NODE_ENV);
 console.log(':: AUTH OPTIONS - isProd:', isProd);
 
+// Validate Keycloak configuration
+console.log('');
+console.log(':: KEYCLOAK CONFIGURATION ::');
+console.log('  CLIENT_ID:', process.env.KEYCLOAK_CLIENT_ID ? '✅ Set' : '❌ MISSING');
+console.log('  CLIENT_SECRET:', process.env.KEYCLOAK_CLIENT_SECRET ? '✅ Set' : '❌ MISSING');
+console.log('  ISSUER:', process.env.KEYCLOAK_ISSUER || '❌ MISSING');
+console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌ MISSING');
+console.log('');
+
+if (!process.env.KEYCLOAK_CLIENT_ID || !process.env.KEYCLOAK_CLIENT_SECRET || !process.env.KEYCLOAK_ISSUER) {
+  console.error('');
+  console.error('❌ ERRO: Variáveis de ambiente do Keycloak não configuradas!');
+  console.error('');
+  console.error('Configure no Railway:');
+  console.error('  KEYCLOAK_CLIENT_ID=access-management');
+  console.error('  KEYCLOAK_CLIENT_SECRET=seu-secret-do-keycloak');
+  console.error('  KEYCLOAK_ISSUER=https://igrp-iam-keycloak-ztlw-staging-1.up.railway.app/realms/igrp');
+  console.error('');
+}
+
+if (!process.env.NEXTAUTH_SECRET) {
+  console.error('');
+  console.error('❌ ERRO: NEXTAUTH_SECRET não configurado!');
+  console.error('');
+  console.error('Gere uma chave com: openssl rand -base64 32');
+  console.error('E configure no Railway: NEXTAUTH_SECRET=sua-chave-gerada');
+  console.error('');
+}
+
 // Handle empty URL during build time
 const url = validBaseUrl ? new URL(validBaseUrl) : { hostname: 'localhost' };
 
