@@ -4,6 +4,41 @@ import KeycloakProvider from 'next-auth/providers/keycloak';
 
 const isProd = process.env.NODE_ENV === 'production';
 const baseUrl = process.env.NEXTAUTH_URL ?? '';
+const basePath = process.env.IGRP_APP_BASE_PATH || '';
+
+// Validate NEXTAUTH_URL configuration
+if (baseUrl.includes('/api/auth')) {
+  console.error('');
+  console.error('❌ ERRO DE CONFIGURAÇÃO ❌');
+  console.error('');
+  console.error('NEXTAUTH_URL está INCORRETO:', baseUrl);
+  console.error('');
+  console.error('NEXTAUTH_URL NÃO deve incluir /api/auth');
+  console.error('NEXTAUTH_URL NÃO deve incluir basePath');
+  console.error('');
+  console.error('✅ Configuração CORRETA:');
+  console.error('   NEXTAUTH_URL=https://apisix.zingdevelopers.com');
+  console.error('   IGRP_APP_BASE_PATH=/igrp-application-center');
+  console.error('');
+  throw new Error('NEXTAUTH_URL incorreto - não deve incluir /api/auth ou basePath');
+}
+
+// Validate if basePath is incorrectly included in NEXTAUTH_URL
+if (basePath && baseUrl.includes(basePath)) {
+  console.error('');
+  console.error('⚠️ AVISO DE CONFIGURAÇÃO ⚠️');
+  console.error('');
+  console.error('NEXTAUTH_URL contém o basePath:', baseUrl);
+  console.error('BasePath configurado:', basePath);
+  console.error('');
+  console.error('Isso vai causar URLs duplicadas!');
+  console.error('');
+  console.error('✅ Configuração CORRETA:');
+  console.error('   NEXTAUTH_URL=https://apisix.zingdevelopers.com');
+  console.error('   IGRP_APP_BASE_PATH=/igrp-application-center');
+  console.error('');
+  throw new Error('NEXTAUTH_URL não deve incluir o IGRP_APP_BASE_PATH');
+}
 
 // Validate and fix invalid URLs (like 0.0.0.0)
 const validBaseUrl = baseUrl.includes('0.0.0.0') 

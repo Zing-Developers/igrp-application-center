@@ -41,14 +41,24 @@ export async function middleware(request: NextRequest) {
     const basePath = process.env.IGRP_APP_BASE_PATH || '';
     const signinPath = `${basePath}/api/auth/signin`;
     
+    // Get the correct public URL (handling proxies like Railway)
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+    const publicUrl = `${protocol}://${host}${pathname}`;
+    
     console.log(':: MIDDLEWARE - Redirecting to signin:', {
       basePath,
       signinPath,
-      callbackUrl: request.url,
+      callbackUrl: publicUrl,
+      rawUrl: request.url,
+      host,
+      protocol,
     });
     
-    const signinUrl = new URL(signinPath, request.url);
-    signinUrl.searchParams.set('callbackUrl', request.url);
+    // Use NEXTAUTH_URL as base if available, otherwise construct from headers
+    const baseUrl = process.env.NEXTAUTH_URL || `${protocol}://${host}`;
+    const signinUrl = new URL(signinPath, baseUrl);
+    signinUrl.searchParams.set('callbackUrl', publicUrl);
     
     return NextResponse.redirect(signinUrl);
   }
