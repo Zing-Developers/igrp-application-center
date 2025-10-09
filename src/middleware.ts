@@ -40,12 +40,15 @@ export async function middleware(request: NextRequest) {
     // Redirect directly to NextAuth signin which will invoke Keycloak
     const basePath = process.env.IGRP_APP_BASE_PATH || '';
     const signinPath = `${basePath}/api/auth/signin`;
-    
+
     // Get the correct public URL (handling proxies like Railway)
     const protocol = request.headers.get('x-forwarded-proto') || 'https';
-    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+    const host =
+      request.headers.get('x-forwarded-host') ||
+      request.headers.get('host') ||
+      request.nextUrl.host;
     const publicUrl = `${protocol}://${host}${pathname}`;
-    
+
     console.log(':: MIDDLEWARE - Redirecting to signin:', {
       basePath,
       signinPath,
@@ -54,12 +57,12 @@ export async function middleware(request: NextRequest) {
       host,
       protocol,
     });
-    
+
     // Use NEXTAUTH_URL as base if available, otherwise construct from headers
     const baseUrl = process.env.NEXTAUTH_URL || `${protocol}://${host}`;
     const signinUrl = new URL(signinPath, baseUrl);
     signinUrl.searchParams.set('callbackUrl', publicUrl);
-    
+
     return NextResponse.redirect(signinUrl);
   }
 

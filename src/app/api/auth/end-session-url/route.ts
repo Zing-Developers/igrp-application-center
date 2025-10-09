@@ -4,8 +4,8 @@ import { buildKeycloakEndSessionUrl } from '@/lib/auth-options';
 
 export async function GET(req: NextRequest) {
   console.log(':: END-SESSION-URL - GET called');
-  
-  const token = await getToken({ 
+
+  const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
   });

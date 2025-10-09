@@ -41,8 +41,8 @@ if (basePath && baseUrl.includes(basePath)) {
 }
 
 // Validate and fix invalid URLs (like 0.0.0.0)
-const validBaseUrl = baseUrl.includes('0.0.0.0') 
-  ? (process.env.IGRP_APP_CENTER_URL || baseUrl) 
+const validBaseUrl = baseUrl.includes('0.0.0.0')
+  ? process.env.IGRP_APP_CENTER_URL || baseUrl
   : baseUrl;
 
 console.log(':: AUTH OPTIONS - NEXTAUTH_URL:', baseUrl);
@@ -67,14 +67,20 @@ console.log('  Clients → access-management → Valid Redirect URIs');
 console.log('  Adicione: ' + validBaseUrl + '/*');
 console.log('');
 
-if (!process.env.KEYCLOAK_CLIENT_ID || !process.env.KEYCLOAK_CLIENT_SECRET || !process.env.KEYCLOAK_ISSUER) {
+if (
+  !process.env.KEYCLOAK_CLIENT_ID ||
+  !process.env.KEYCLOAK_CLIENT_SECRET ||
+  !process.env.KEYCLOAK_ISSUER
+) {
   console.error('');
   console.error('❌ ERRO: Variáveis de ambiente do Keycloak não configuradas!');
   console.error('');
   console.error('Configure no Railway:');
   console.error('  KEYCLOAK_CLIENT_ID=access-management');
   console.error('  KEYCLOAK_CLIENT_SECRET=seu-secret-do-keycloak');
-  console.error('  KEYCLOAK_ISSUER=https://igrp-iam-keycloak-ztlw-staging-1.up.railway.app/realms/igrp');
+  console.error(
+    '  KEYCLOAK_ISSUER=https://igrp-iam-keycloak-ztlw-staging-1.up.railway.app/realms/igrp',
+  );
   console.error('');
 }
 
@@ -127,25 +133,20 @@ export const authOptions: NextAuthOptions = {
   },
 
   debug: true, // Always enable debug to see what's happening
-  
+
   events: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       console.log('');
       console.log('🔐 EVENT: signIn triggered');
       console.log('  User:', user?.email || user?.name);
       console.log('  Provider:', account?.provider);
       console.log('');
-      return true;
     },
     async signOut() {
       console.log('🚪 EVENT: signOut triggered');
     },
-    async session({ session }) {
-      console.log('📋 EVENT: session checked');
-      return session;
-    },
   },
-  
+
   logger: {
     error(code, ...metadata) {
       console.error('');
@@ -181,15 +182,14 @@ export const authOptions: NextAuthOptions = {
       // Use validBaseUrl instead of baseUrl to handle 0.0.0.0
       const baseUrl = validBaseUrl || nextAuthBaseUrl;
 
-      // Get stack trace to understand where redirect is being called from
-      const stack = new Error().stack;
-      const isFromKeycloak = stack?.includes('keycloak') || url.includes('keycloak');
-      const isFromSignin = stack?.includes('signin') || url.includes('signin');
-      
-      console.log(':: AUTH REDIRECT DEBUG ::', { 
-        url, 
-        baseUrl, 
-        nextAuthBaseUrl, 
+      // Detect where redirect is being called from
+      const isFromKeycloak = url.includes('keycloak');
+      const isFromSignin = url.includes('signin');
+
+      console.log(':: AUTH REDIRECT DEBUG ::', {
+        url,
+        baseUrl,
+        nextAuthBaseUrl,
         basePath,
         isFromKeycloak,
         isFromSignin,
@@ -211,20 +211,20 @@ export const authOptions: NextAuthOptions = {
         try {
           const urlObj = new URL(url);
           const pathname = urlObj.pathname;
-          
+
           // Check if pathname already has basePath
           if (basePath && pathname.startsWith(basePath)) {
             console.log(':: AUTH REDIRECT - basePath already in URL, returning as-is');
             return url;
           }
-          
+
           // Check if we need to add basePath
           if (basePath && !pathname.startsWith(basePath)) {
             console.log(':: AUTH REDIRECT - Adding basePath');
             const _url = url.replace(baseUrl, '');
             return `${baseUrl}${basePath}${_url}`;
           }
-          
+
           return url;
         } catch (error) {
           console.error(':: AUTH REDIRECT - Error parsing URL:', error);
@@ -259,14 +259,14 @@ export const authOptions: NextAuthOptions = {
         token.expiresAt = account.expires_at;
 
         delete token.error;
-        
+
         console.log(':: JWT CALLBACK - Token created:', {
           hasIdToken: !!token.idToken,
           hasAccessToken: !!token.accessToken,
           hasRefreshToken: !!token.refreshToken,
           expiresAt: token.expiresAt,
         });
-        
+
         return token;
       }
 
@@ -274,7 +274,7 @@ export const authOptions: NextAuthOptions = {
         console.log(':: JWT CALLBACK - Token still valid');
         return token;
       }
-      
+
       console.log(':: JWT CALLBACK - Token needs refresh');
 
       try {
@@ -314,7 +314,7 @@ export const authOptions: NextAuthOptions = {
         hasIdToken: !!token?.idToken,
         hasError: !!token?.error,
       });
-      
+
       session.user = token.user as Session['user'];
       session.accessToken = token.accessToken;
       session.idToken = token.idToken;
@@ -366,7 +366,7 @@ export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
 
   // Use idToken directly from JWT
   const idToken = jwt?.idToken as string | undefined;
-  
+
   console.log(':: LOGOUT - Has idToken:', !!idToken);
 
   if (idToken) {
@@ -379,7 +379,7 @@ export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
   // To enable automatic redirect after logout, configure in Keycloak:
   // Clients -> access-management -> Settings -> Valid Post Logout Redirect URIs
   // Add: http://localhost:3000/* and your production URL
-  
+
   // const loginUrl = '/login';
   // const basePath = process.env.IGRP_APP_BASE_PATH || '';
   // const postLogoutRedirectUri = process.env.NEXTAUTH_URL
