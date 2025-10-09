@@ -4,21 +4,7 @@ import KeycloakProvider from 'next-auth/providers/keycloak';
 
 const isProd = process.env.NODE_ENV === 'production';
 const basePath = process.env.IGRP_APP_BASE_PATH || '';
-
-// Build the correct NEXTAUTH_URL including basePath if configured
-// This is CRITICAL for callback URLs to work correctly
-let baseUrl = process.env.NEXTAUTH_URL ?? '';
-
-// If basePath is configured, NEXTAUTH_URL MUST include it
-if (basePath && !baseUrl.includes(basePath)) {
-  console.log('');
-  console.log('⚠️ AJUSTANDO NEXTAUTH_URL COM BASEPATH ⚠️');
-  console.log('  NEXTAUTH_URL original:', baseUrl);
-  console.log('  BasePath configurado:', basePath);
-  baseUrl = `${baseUrl}${basePath}`;
-  console.log('  NEXTAUTH_URL ajustado:', baseUrl);
-  console.log('');
-}
+const baseUrl = process.env.NEXTAUTH_URL ?? '';
 
 // Validate NEXTAUTH_URL configuration
 if (baseUrl.includes('/api/auth')) {
@@ -36,14 +22,35 @@ if (baseUrl.includes('/api/auth')) {
   throw new Error('NEXTAUTH_URL incorreto - não deve incluir /api/auth');
 }
 
+// Validate that NEXTAUTH_URL does NOT include basePath
+if (basePath && baseUrl.includes(basePath)) {
+  console.error('');
+  console.error('❌ ERRO DE CONFIGURAÇÃO ❌');
+  console.error('');
+  console.error('NEXTAUTH_URL está INCORRETO:', baseUrl);
+  console.error('NEXTAUTH_URL NÃO deve incluir o basePath!');
+  console.error('');
+  console.error('BasePath configurado:', basePath);
+  console.error('');
+  console.error('✅ Configuração CORRETA para APISIX:');
+  console.error('   NEXTAUTH_URL=https://apisix.zingdevelopers.com');
+  console.error('   IGRP_APP_BASE_PATH=/igrp-application-center');
+  console.error('');
+  console.error('✅ Configuração CORRETA para Railway:');
+  console.error('   NEXTAUTH_URL=https://igrp-application-center.up.railway.app');
+  console.error('   IGRP_APP_BASE_PATH=');
+  console.error('');
+  throw new Error('NEXTAUTH_URL não deve incluir o basePath - veja logs acima');
+}
+
 // Validate and fix invalid URLs (like 0.0.0.0)
 const validBaseUrl = baseUrl.includes('0.0.0.0')
   ? process.env.IGRP_APP_CENTER_URL || baseUrl
   : baseUrl;
 
-console.log(':: AUTH OPTIONS - NEXTAUTH_URL original:', process.env.NEXTAUTH_URL);
-console.log(':: AUTH OPTIONS - NEXTAUTH_URL ajustado:', baseUrl);
+console.log(':: AUTH OPTIONS - NEXTAUTH_URL:', baseUrl);
 console.log(':: AUTH OPTIONS - Valid URL:', validBaseUrl);
+console.log(':: AUTH OPTIONS - BasePath:', basePath);
 console.log(':: AUTH OPTIONS - NODE_ENV:', process.env.NODE_ENV);
 console.log(':: AUTH OPTIONS - isProd:', isProd);
 
@@ -56,16 +63,17 @@ console.log('  ISSUER:', process.env.KEYCLOAK_ISSUER || '❌ MISSING');
 console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌ MISSING');
 console.log('');
 console.log(':: CALLBACK URL QUE O NEXTAUTH VAI USAR ::');
-console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
+if (basePath) {
+  console.log('  ' + validBaseUrl + basePath + '/api/auth/callback/keycloak');
+} else {
+  console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
+}
 console.log('');
 console.log('  Configure no Keycloak:');
 console.log('  Clients → access-management → Valid Redirect URIs');
+console.log('  Adicione: ' + validBaseUrl + '/*');
 if (basePath) {
-  const baseWithoutPath = validBaseUrl.replace(basePath, '');
-  console.log('  Adicione: ' + baseWithoutPath + '/*');
-  console.log('  Adicione: ' + validBaseUrl + '/*');
-} else {
-  console.log('  Adicione: ' + validBaseUrl + '/*');
+  console.log('  Adicione: ' + validBaseUrl + basePath + '/*');
 }
 console.log('');
 
