@@ -66,13 +66,19 @@ console.log('  ISSUER:', process.env.KEYCLOAK_ISSUER || '❌ MISSING');
 console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌ MISSING');
 console.log('');
 console.log(':: NEXTAUTH.JS URLS ::');
-console.log('  Callback URL:', validBaseUrl + (basePath || '') + '/api/auth/callback/keycloak');
-console.log('  Signin URL:', validBaseUrl + (basePath || '') + '/api/auth/signin/keycloak');
+// validBaseUrl already contains the full path with /api/auth when basePath is set
+console.log('  Callback URL:', validBaseUrl + '/callback/keycloak');
+console.log('  Signin URL:', validBaseUrl + '/signin/keycloak');
 console.log('');
 console.log('  ✅ Configure no Keycloak (Valid Redirect URIs):');
-console.log('  ' + validBaseUrl + '/*');
 if (basePath) {
-  console.log('  ' + validBaseUrl + basePath + '/*');
+  // Extract base domain without the path
+  const baseWithoutPath = validBaseUrl.replace(basePath + '/api/auth', '');
+  console.log('  ' + baseWithoutPath + '/*');
+  console.log('  ' + baseWithoutPath + basePath + '/*');
+} else {
+  const baseWithoutApiAuth = validBaseUrl.replace('/api/auth', '');
+  console.log('  ' + baseWithoutApiAuth + '/*');
 }
 console.log('');
 
@@ -187,45 +193,54 @@ export const authOptions: NextAuthOptions = {
     async redirect({ url, baseUrl: nextAuthBaseUrl }) {
       const basePath = process.env.IGRP_APP_BASE_PATH || '';
       // Use validBaseUrl instead of baseUrl to handle 0.0.0.0
+      // Important: When using custom basePath, validBaseUrl already includes basePath + /api/auth
+      // Example: https://apisix.zingdevelopers.com/igrp-application-center/api/auth
       const baseUrl = validBaseUrl || nextAuthBaseUrl;
+
+      // Extract the domain without /api/auth for building redirect URLs
+      const baseDomain = baseUrl.replace('/api/auth', '');
 
       console.log(':: AUTH REDIRECT DEBUG ::', {
         url,
         baseUrl,
+        baseDomain,
         nextAuthBaseUrl,
         basePath,
         urlType: url.startsWith('http') ? 'absolute' : 'relative',
       });
 
-      // Handle relative paths
+      // Handle relative paths (e.g., "/", "/dashboard")
       if (url.startsWith('/')) {
         // Check if the relative path already has basePath
         if (basePath && url.startsWith(basePath)) {
-          return `${baseUrl}${url}`;
+          console.log(':: AUTH REDIRECT - Relative URL already has basePath');
+          return `${baseDomain}${url}`;
         }
-        return `${baseUrl}${basePath}${url}`;
+        console.log(':: AUTH REDIRECT - Adding basePath to relative URL');
+        return `${baseDomain}${basePath}${url}`;
       }
 
-      // Handle full URLs that start with baseUrl
-      if (url.startsWith(baseUrl)) {
-        // Parse the URL to get the pathname
+      // Handle full URLs
+      if (url.startsWith('http')) {
         try {
           const urlObj = new URL(url);
           const pathname = urlObj.pathname;
 
+          console.log(':: AUTH REDIRECT - Absolute URL, pathname:', pathname);
+
           // Check if pathname already has basePath
           if (basePath && pathname.startsWith(basePath)) {
-            console.log(':: AUTH REDIRECT - basePath already in URL, returning as-is');
+            console.log(':: AUTH REDIRECT - Pathname already has basePath, returning as-is');
             return url;
           }
 
-          // Check if we need to add basePath
-          if (basePath && !pathname.startsWith(basePath)) {
-            console.log(':: AUTH REDIRECT - Adding basePath');
-            const _url = url.replace(baseUrl, '');
-            return `${baseUrl}${basePath}${_url}`;
+          // If URL is using our domain, add basePath
+          if (url.startsWith(baseDomain)) {
+            console.log(':: AUTH REDIRECT - Adding basePath to pathname');
+            return `${baseDomain}${basePath}${pathname}`;
           }
 
+          // External URL, return as-is
           return url;
         } catch (error) {
           console.error(':: AUTH REDIRECT - Error parsing URL:', error);
@@ -233,8 +248,9 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Default fallback
-      return `${baseUrl}${basePath}`;
+      // Default fallback - go to root with basePath
+      console.log(':: AUTH REDIRECT - Default fallback');
+      return `${baseDomain}${basePath}/`;
     },
     async jwt({ token, user, account, profile }) {
       if (account) {
