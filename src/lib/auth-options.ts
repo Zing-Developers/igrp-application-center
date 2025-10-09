@@ -3,8 +3,22 @@ import type { JWT } from '@igrp/framework-next-auth/jwt';
 import KeycloakProvider from 'next-auth/providers/keycloak';
 
 const isProd = process.env.NODE_ENV === 'production';
-const baseUrl = process.env.NEXTAUTH_URL ?? '';
 const basePath = process.env.IGRP_APP_BASE_PATH || '';
+
+// Build the correct NEXTAUTH_URL including basePath if configured
+// This is CRITICAL for callback URLs to work correctly
+let baseUrl = process.env.NEXTAUTH_URL ?? '';
+
+// If basePath is configured, NEXTAUTH_URL MUST include it
+if (basePath && !baseUrl.includes(basePath)) {
+  console.log('');
+  console.log('⚠️ AJUSTANDO NEXTAUTH_URL COM BASEPATH ⚠️');
+  console.log('  NEXTAUTH_URL original:', baseUrl);
+  console.log('  BasePath configurado:', basePath);
+  baseUrl = `${baseUrl}${basePath}`;
+  console.log('  NEXTAUTH_URL ajustado:', baseUrl);
+  console.log('');
+}
 
 // Validate NEXTAUTH_URL configuration
 if (baseUrl.includes('/api/auth')) {
@@ -14,30 +28,12 @@ if (baseUrl.includes('/api/auth')) {
   console.error('NEXTAUTH_URL está INCORRETO:', baseUrl);
   console.error('');
   console.error('NEXTAUTH_URL NÃO deve incluir /api/auth');
-  console.error('NEXTAUTH_URL NÃO deve incluir basePath');
   console.error('');
   console.error('✅ Configuração CORRETA:');
   console.error('   NEXTAUTH_URL=https://apisix.zingdevelopers.com');
   console.error('   IGRP_APP_BASE_PATH=/igrp-application-center');
   console.error('');
-  throw new Error('NEXTAUTH_URL incorreto - não deve incluir /api/auth ou basePath');
-}
-
-// Validate if basePath is incorrectly included in NEXTAUTH_URL
-if (basePath && baseUrl.includes(basePath)) {
-  console.error('');
-  console.error('⚠️ AVISO DE CONFIGURAÇÃO ⚠️');
-  console.error('');
-  console.error('NEXTAUTH_URL contém o basePath:', baseUrl);
-  console.error('BasePath configurado:', basePath);
-  console.error('');
-  console.error('Isso vai causar URLs duplicadas!');
-  console.error('');
-  console.error('✅ Configuração CORRETA:');
-  console.error('   NEXTAUTH_URL=https://apisix.zingdevelopers.com');
-  console.error('   IGRP_APP_BASE_PATH=/igrp-application-center');
-  console.error('');
-  throw new Error('NEXTAUTH_URL não deve incluir o IGRP_APP_BASE_PATH');
+  throw new Error('NEXTAUTH_URL incorreto - não deve incluir /api/auth');
 }
 
 // Validate and fix invalid URLs (like 0.0.0.0)
@@ -45,7 +41,8 @@ const validBaseUrl = baseUrl.includes('0.0.0.0')
   ? process.env.IGRP_APP_CENTER_URL || baseUrl
   : baseUrl;
 
-console.log(':: AUTH OPTIONS - NEXTAUTH_URL:', baseUrl);
+console.log(':: AUTH OPTIONS - NEXTAUTH_URL original:', process.env.NEXTAUTH_URL);
+console.log(':: AUTH OPTIONS - NEXTAUTH_URL ajustado:', baseUrl);
 console.log(':: AUTH OPTIONS - Valid URL:', validBaseUrl);
 console.log(':: AUTH OPTIONS - NODE_ENV:', process.env.NODE_ENV);
 console.log(':: AUTH OPTIONS - isProd:', isProd);
@@ -58,17 +55,18 @@ console.log('  CLIENT_SECRET:', process.env.KEYCLOAK_CLIENT_SECRET ? '✅ Set' :
 console.log('  ISSUER:', process.env.KEYCLOAK_ISSUER || '❌ MISSING');
 console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌ MISSING');
 console.log('');
-console.log(':: CALLBACK URL ESPERADA ::');
-console.log('  O Keycloak deve redirecionar para:');
-if (basePath) {
-  console.log('  ' + validBaseUrl + basePath + '/api/auth/callback/keycloak');
-} else {
-  console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
-}
+console.log(':: CALLBACK URL QUE O NEXTAUTH VAI USAR ::');
+console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
 console.log('');
 console.log('  Configure no Keycloak:');
 console.log('  Clients → access-management → Valid Redirect URIs');
-console.log('  Adicione: ' + validBaseUrl + '/*');
+if (basePath) {
+  const baseWithoutPath = validBaseUrl.replace(basePath, '');
+  console.log('  Adicione: ' + baseWithoutPath + '/*');
+  console.log('  Adicione: ' + validBaseUrl + '/*');
+} else {
+  console.log('  Adicione: ' + validBaseUrl + '/*');
+}
 console.log('');
 
 if (
@@ -103,12 +101,6 @@ const cookieDomain = undefined;
 
 console.log(':: AUTH OPTIONS - Cookie domain:', cookieDomain);
 console.log(':: AUTH OPTIONS - Cookie path:', process.env.IGRP_APP_BASE_PATH || '/');
-
-const nextAuthBasePath = process.env.IGRP_APP_BASE_PATH
-  ? `${process.env.IGRP_APP_BASE_PATH}/api/auth`
-  : '/api/auth';
-
-console.log(':: AUTH OPTIONS - NextAuth basePath:', nextAuthBasePath);
 console.log('');
 
 export const authOptions: NextAuthOptions = {
