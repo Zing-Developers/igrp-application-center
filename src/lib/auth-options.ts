@@ -57,14 +57,18 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === 'development',
   
   logger: {
-    error(code, metadata) {
-      console.error(':: NEXTAUTH ERROR ::', code, metadata);
+    error(code, ...metadata) {
+      console.error(':: NEXTAUTH ERROR ::', code, JSON.stringify(metadata, null, 2));
     },
     warn(code) {
       console.warn(':: NEXTAUTH WARN ::', code);
     },
-    debug(code, metadata) {
-      console.log(':: NEXTAUTH DEBUG ::', code, metadata);
+    debug(code, ...metadata) {
+      if (code === 'OAUTH_CALLBACK_ERROR') {
+        console.error(':: NEXTAUTH OAUTH ERROR ::', JSON.stringify(metadata, null, 2));
+      } else {
+        console.log(':: NEXTAUTH DEBUG ::', code, metadata);
+      }
     },
   },
 
@@ -132,7 +136,8 @@ export const authOptions: NextAuthOptions = {
             email: user.email ?? profile?.email ?? null,
           };
         }
-        // Store only accessToken, not idToken (reduces JWT size significantly)
+        // Store all tokens (keeping idToken for compatibility)
+        token.idToken = account.id_token;
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
@@ -140,6 +145,7 @@ export const authOptions: NextAuthOptions = {
         delete token.error;
         
         console.log(':: JWT CALLBACK - Token created:', {
+          hasIdToken: !!token.idToken,
           hasAccessToken: !!token.accessToken,
           hasRefreshToken: !!token.refreshToken,
           expiresAt: token.expiresAt,
@@ -172,6 +178,7 @@ export const authOptions: NextAuthOptions = {
         const updatedToken: JWT = {
           ...token,
           user: token.user,
+          idToken: tokens.id_token,
           accessToken: tokens.access_token,
           expiresAt: Math.floor(Date.now() / 1000 + Number(tokens.expires_in)),
           refreshToken: tokens.refresh_token || token.refreshToken,
@@ -188,11 +195,13 @@ export const authOptions: NextAuthOptions = {
         hasToken: !!token,
         hasUser: !!token?.user,
         hasAccessToken: !!token?.accessToken,
+        hasIdToken: !!token?.idToken,
         hasError: !!token?.error,
       });
       
       session.user = token.user as Session['user'];
       session.accessToken = token.accessToken;
+      session.idToken = token.idToken;
       session.error = token.error;
       session.expiresAt = token.expiresAt;
       return session;
@@ -239,28 +248,10 @@ export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
   // Build URL safely - issuer is already checked above
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
 
-  // Get fresh id_token for logout
-  let idToken: string | undefined;
-
-  if (jwt?.refreshToken) {
-    try {
-      console.log(':: LOGOUT - Fetching fresh id_token with refresh token');
-      const response = await requestRefreshOfAccessToken(jwt);
-
-      if (response.ok) {
-        const tokens: TokenSet = await response.json();
-        idToken = tokens.id_token;
-        console.log(':: LOGOUT - Got id_token:', !!idToken);
-      } else {
-        const errorText = await response.text();
-        console.error(':: LOGOUT - Failed to get id_token:', response.status, errorText);
-      }
-    } catch (error) {
-      console.error(':: LOGOUT - Error getting id_token for logout:', error);
-    }
-  } else {
-    console.warn(':: LOGOUT - No refresh token available for logout');
-  }
+  // Use idToken directly from JWT
+  const idToken = jwt?.idToken as string | undefined;
+  
+  console.log(':: LOGOUT - Has idToken:', !!idToken);
 
   if (idToken) {
     url.searchParams.set('id_token_hint', idToken);
