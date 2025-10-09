@@ -3,21 +3,32 @@ import { getToken } from '@igrp/framework-next-auth/jwt';
 
 const PUBLIC_PATHS = ['/login', '/logout', '/api/auth'];
 
-function isPublicPath(pathname: string) {
-  return (
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) ||
-    pathname.startsWith('/api/auth/') ||
+function isPublicPath(pathname: string, basePath: string) {
+  // Remove basePath from pathname for comparison
+  const pathWithoutBase =
+    basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) : pathname;
+
+  const isPublic =
+    PUBLIC_PATHS.some((p) => pathWithoutBase === p || pathWithoutBase.startsWith(p + '/')) ||
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
-    pathname.includes('.')
-  );
+    pathname.includes('.');
+
+  if (basePath && pathname.startsWith(basePath)) {
+    console.log(':: MIDDLEWARE - Public path check:', { pathname, pathWithoutBase, isPublic });
+  }
+
+  return isPublic;
 }
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const basePath = process.env.IGRP_APP_BASE_PATH || '';
 
   console.log(':: MIDDLEWARE - Path:', pathname);
+  console.log(':: MIDDLEWARE - BasePath:', basePath);
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPath(pathname, basePath)) {
     console.log(':: MIDDLEWARE - Public path, allowing');
     return NextResponse.next();
   }
@@ -38,7 +49,6 @@ export async function middleware(request: NextRequest) {
 
   if (!token) {
     // Redirect to login page
-    const basePath = process.env.IGRP_APP_BASE_PATH || '';
     const loginPath = `${basePath}/login`;
 
     // Get the correct public URL (handling proxies like Railway)
