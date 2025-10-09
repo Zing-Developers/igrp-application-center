@@ -58,6 +58,14 @@ console.log('  CLIENT_SECRET:', process.env.KEYCLOAK_CLIENT_SECRET ? '✅ Set' :
 console.log('  ISSUER:', process.env.KEYCLOAK_ISSUER || '❌ MISSING');
 console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌ MISSING');
 console.log('');
+console.log(':: CALLBACK URL ESPERADA ::');
+console.log('  O Keycloak deve redirecionar para:');
+console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
+console.log('');
+console.log('  Configure no Keycloak:');
+console.log('  Clients → access-management → Valid Redirect URIs');
+console.log('  Adicione: ' + validBaseUrl + '/*');
+console.log('');
 
 if (!process.env.KEYCLOAK_CLIENT_ID || !process.env.KEYCLOAK_CLIENT_SECRET || !process.env.KEYCLOAK_ISSUER) {
   console.error('');
