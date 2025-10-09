@@ -93,9 +93,6 @@ if (!process.env.NEXTAUTH_SECRET) {
   console.error('');
 }
 
-// Handle empty URL during build time
-const url = validBaseUrl ? new URL(validBaseUrl) : { hostname: 'localhost' };
-
 // Don't set domain for cookies - let browser handle it automatically
 // This prevents issues with subdomains and different environments
 const cookieDomain = undefined;
@@ -155,7 +152,7 @@ export const authOptions: NextAuthOptions = {
       console.error('========================================');
       try {
         console.error(JSON.stringify(metadata, null, 2));
-      } catch (e) {
+      } catch {
         console.error(metadata);
       }
       console.error('========================================');
@@ -169,7 +166,7 @@ export const authOptions: NextAuthOptions = {
       if (metadata && metadata.length > 0) {
         try {
           console.log(JSON.stringify(metadata, null, 2));
-        } catch (e) {
+        } catch {
           console.log(metadata);
         }
       }
@@ -182,17 +179,11 @@ export const authOptions: NextAuthOptions = {
       // Use validBaseUrl instead of baseUrl to handle 0.0.0.0
       const baseUrl = validBaseUrl || nextAuthBaseUrl;
 
-      // Detect where redirect is being called from
-      const isFromKeycloak = url.includes('keycloak');
-      const isFromSignin = url.includes('signin');
-
       console.log(':: AUTH REDIRECT DEBUG ::', {
         url,
         baseUrl,
         nextAuthBaseUrl,
         basePath,
-        isFromKeycloak,
-        isFromSignin,
         urlType: url.startsWith('http') ? 'absolute' : 'relative',
       });
 
@@ -325,8 +316,8 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages: {
-    signIn: '/api/auth/signin',
-    error: '/api/auth/error',
+    signIn: '/login',
+    error: '/login',
   },
 };
 

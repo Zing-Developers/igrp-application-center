@@ -37,9 +37,9 @@ export async function middleware(request: NextRequest) {
   console.log(':: MIDDLEWARE - Has token:', !!token);
 
   if (!token) {
-    // Redirect directly to NextAuth signin which will invoke Keycloak
+    // Redirect to login page
     const basePath = process.env.IGRP_APP_BASE_PATH || '';
-    const signinPath = `${basePath}/api/auth/signin`;
+    const loginPath = `${basePath}/login`;
 
     // Get the correct public URL (handling proxies like Railway)
     const protocol = request.headers.get('x-forwarded-proto') || 'https';
@@ -49,9 +49,9 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.host;
     const publicUrl = `${protocol}://${host}${pathname}`;
 
-    console.log(':: MIDDLEWARE - Redirecting to signin:', {
+    console.log(':: MIDDLEWARE - Redirecting to login:', {
       basePath,
-      signinPath,
+      loginPath,
       callbackUrl: publicUrl,
       rawUrl: request.url,
       host,
@@ -60,10 +60,10 @@ export async function middleware(request: NextRequest) {
 
     // Use NEXTAUTH_URL as base if available, otherwise construct from headers
     const baseUrl = process.env.NEXTAUTH_URL || `${protocol}://${host}`;
-    const signinUrl = new URL(signinPath, baseUrl);
-    signinUrl.searchParams.set('callbackUrl', publicUrl);
+    const loginUrl = new URL(loginPath, baseUrl);
+    loginUrl.searchParams.set('callbackUrl', publicUrl);
 
-    return NextResponse.redirect(signinUrl);
+    return NextResponse.redirect(loginUrl);
   }
 
   if (token.error === 'RefreshAccessTokenError') {
