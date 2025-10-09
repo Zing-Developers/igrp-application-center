@@ -126,7 +126,25 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  debug: process.env.NODE_ENV === 'development',
+  debug: true, // Always enable debug to see what's happening
+  
+  events: {
+    async signIn({ user, account, profile }) {
+      console.log('');
+      console.log('🔐 EVENT: signIn triggered');
+      console.log('  User:', user?.email || user?.name);
+      console.log('  Provider:', account?.provider);
+      console.log('');
+      return true;
+    },
+    async signOut() {
+      console.log('🚪 EVENT: signOut triggered');
+    },
+    async session({ session }) {
+      console.log('📋 EVENT: session checked');
+      return session;
+    },
+  },
   
   logger: {
     error(code, ...metadata) {
@@ -163,7 +181,20 @@ export const authOptions: NextAuthOptions = {
       // Use validBaseUrl instead of baseUrl to handle 0.0.0.0
       const baseUrl = validBaseUrl || nextAuthBaseUrl;
 
-      console.log(':: AUTH REDIRECT DEBUG ::', { url, baseUrl, nextAuthBaseUrl, basePath });
+      // Get stack trace to understand where redirect is being called from
+      const stack = new Error().stack;
+      const isFromKeycloak = stack?.includes('keycloak') || url.includes('keycloak');
+      const isFromSignin = stack?.includes('signin') || url.includes('signin');
+      
+      console.log(':: AUTH REDIRECT DEBUG ::', { 
+        url, 
+        baseUrl, 
+        nextAuthBaseUrl, 
+        basePath,
+        isFromKeycloak,
+        isFromSignin,
+        urlType: url.startsWith('http') ? 'absolute' : 'relative',
+      });
 
       // Handle relative paths
       if (url.startsWith('/')) {
