@@ -12,10 +12,18 @@ const validBaseUrl = baseUrl.includes('0.0.0.0')
 
 console.log(':: AUTH OPTIONS - NEXTAUTH_URL:', baseUrl);
 console.log(':: AUTH OPTIONS - Valid URL:', validBaseUrl);
+console.log(':: AUTH OPTIONS - NODE_ENV:', process.env.NODE_ENV);
+console.log(':: AUTH OPTIONS - isProd:', isProd);
 
 // Handle empty URL during build time
 const url = validBaseUrl ? new URL(validBaseUrl) : { hostname: 'localhost' };
-const cookieDomain = isProd && url.hostname !== 'localhost' ? url.hostname : undefined;
+
+// Don't set domain for cookies - let browser handle it automatically
+// This prevents issues with subdomains and different environments
+const cookieDomain = undefined;
+
+console.log(':: AUTH OPTIONS - Cookie domain:', cookieDomain);
+console.log(':: AUTH OPTIONS - Cookie path:', process.env.IGRP_APP_BASE_PATH || '/');
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -47,6 +55,18 @@ export const authOptions: NextAuthOptions = {
   },
 
   debug: process.env.NODE_ENV === 'development',
+  
+  logger: {
+    error(code, metadata) {
+      console.error(':: NEXTAUTH ERROR ::', code, metadata);
+    },
+    warn(code) {
+      console.warn(':: NEXTAUTH WARN ::', code);
+    },
+    debug(code, metadata) {
+      console.log(':: NEXTAUTH DEBUG ::', code, metadata);
+    },
+  },
 
   callbacks: {
     async redirect({ url, baseUrl: nextAuthBaseUrl }) {
@@ -101,6 +121,8 @@ export const authOptions: NextAuthOptions = {
           hasUser: !!user,
           hasAccount: !!account,
           provider: account.provider,
+          hasAccessToken: !!account.access_token,
+          hasRefreshToken: !!account.refresh_token,
         });
 
         if (user && !('user' in token)) {
@@ -116,12 +138,22 @@ export const authOptions: NextAuthOptions = {
         token.expiresAt = account.expires_at;
 
         delete token.error;
+        
+        console.log(':: JWT CALLBACK - Token created:', {
+          hasAccessToken: !!token.accessToken,
+          hasRefreshToken: !!token.refreshToken,
+          expiresAt: token.expiresAt,
+        });
+        
         return token;
       }
 
       if (token.expiresAt && Date.now() < token.expiresAt * 1000 - 60_000) {
+        console.log(':: JWT CALLBACK - Token still valid');
         return token;
       }
+      
+      console.log(':: JWT CALLBACK - Token needs refresh');
 
       try {
         if (!token.refreshToken) {
@@ -152,6 +184,13 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async session({ session, token }) {
+      console.log(':: SESSION CALLBACK ::', {
+        hasToken: !!token,
+        hasUser: !!token?.user,
+        hasAccessToken: !!token?.accessToken,
+        hasError: !!token?.error,
+      });
+      
       session.user = token.user as Session['user'];
       session.accessToken = token.accessToken;
       session.error = token.error;
