@@ -201,14 +201,29 @@ export const authOptions: NextAuthOptions = {
       const baseDomain = baseUrl.replace('/api/auth', '');
 
       // CRITICAL FIX: Detect and fix URLs with duplicated basePath
-      // Example bad URL: /igrp-application-center/api/auth/igrp-application-center/
-      // Should be: /igrp-application-center/
-      if (basePath && url.includes('/api/auth/' + basePath.slice(1))) {
-        console.log(':: AUTH REDIRECT - FIXING DUPLICATED BASEPATH IN URL');
-        console.log('  Original URL:', url);
-        // Remove the duplicated basePath after /api/auth/
-        url = url.replace('/api/auth/' + basePath.slice(1), '');
-        console.log('  Fixed URL:', url);
+      // NextAuth sometimes creates URLs like: /basePath/basePath/ or /basePath/api/auth/basePath/
+      if (basePath) {
+        // Fix pattern 1: /basePath/api/auth/basePath/ -> /basePath/api/auth/
+        if (url.includes(basePath + '/api/auth' + basePath)) {
+          console.log(':: AUTH REDIRECT - FIXING DUPLICATED BASEPATH (pattern 1)');
+          console.log('  Original URL:', url);
+          url = url.replace(basePath + '/api/auth' + basePath, basePath + '/api/auth');
+          console.log('  Fixed URL:', url);
+        }
+        // Fix pattern 2: /basePath/basePath/ -> /basePath/
+        else if (url.includes(basePath + basePath + '/')) {
+          console.log(':: AUTH REDIRECT - FIXING DUPLICATED BASEPATH (pattern 2)');
+          console.log('  Original URL:', url);
+          url = url.replace(basePath + basePath + '/', basePath + '/');
+          console.log('  Fixed URL:', url);
+        }
+        // Fix pattern 3: domain.com/basePath/basePath -> domain.com/basePath/
+        else if (url.includes(basePath + basePath)) {
+          console.log(':: AUTH REDIRECT - FIXING DUPLICATED BASEPATH (pattern 3)');
+          console.log('  Original URL:', url);
+          url = url.replace(basePath + basePath, basePath);
+          console.log('  Fixed URL:', url);
+        }
       }
 
       console.log(':: AUTH REDIRECT DEBUG ::', {
