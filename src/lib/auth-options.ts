@@ -200,6 +200,17 @@ export const authOptions: NextAuthOptions = {
       // Extract the domain without /api/auth for building redirect URLs
       const baseDomain = baseUrl.replace('/api/auth', '');
 
+      // CRITICAL FIX: Detect and fix URLs with duplicated basePath
+      // Example bad URL: /igrp-application-center/api/auth/igrp-application-center/
+      // Should be: /igrp-application-center/
+      if (basePath && url.includes('/api/auth/' + basePath.slice(1))) {
+        console.log(':: AUTH REDIRECT - FIXING DUPLICATED BASEPATH IN URL');
+        console.log('  Original URL:', url);
+        // Remove the duplicated basePath after /api/auth/
+        url = url.replace('/api/auth/' + basePath.slice(1), '');
+        console.log('  Fixed URL:', url);
+      }
+
       console.log(':: AUTH REDIRECT DEBUG ::', {
         url,
         baseUrl,
