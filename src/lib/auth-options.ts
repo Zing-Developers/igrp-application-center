@@ -60,7 +60,11 @@ console.log('  NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? '✅ Set' : '❌
 console.log('');
 console.log(':: CALLBACK URL ESPERADA ::');
 console.log('  O Keycloak deve redirecionar para:');
-console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
+if (basePath) {
+  console.log('  ' + validBaseUrl + basePath + '/api/auth/callback/keycloak');
+} else {
+  console.log('  ' + validBaseUrl + '/api/auth/callback/keycloak');
+}
 console.log('');
 console.log('  Configure no Keycloak:');
 console.log('  Clients → access-management → Valid Redirect URIs');
@@ -99,6 +103,13 @@ const cookieDomain = undefined;
 
 console.log(':: AUTH OPTIONS - Cookie domain:', cookieDomain);
 console.log(':: AUTH OPTIONS - Cookie path:', process.env.IGRP_APP_BASE_PATH || '/');
+
+const nextAuthBasePath = process.env.IGRP_APP_BASE_PATH
+  ? `${process.env.IGRP_APP_BASE_PATH}/api/auth`
+  : '/api/auth';
+
+console.log(':: AUTH OPTIONS - NextAuth basePath:', nextAuthBasePath);
+console.log('');
 
 export const authOptions: NextAuthOptions = {
   providers: [
