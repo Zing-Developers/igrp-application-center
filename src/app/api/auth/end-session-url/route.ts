@@ -3,13 +3,33 @@ import { getToken } from '@igrp/framework-next-auth';
 import { buildKeycloakEndSessionUrl } from '@/lib/auth-options';
 
 export async function GET(req: NextRequest) {
-  const token = await getToken({ req });
+  console.log(':: END-SESSION-URL - GET called');
+  
+  const token = await getToken({ 
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  console.log(':: END-SESSION-URL - Token:', {
+    hasToken: !!token,
+    hasRefreshToken: !!token?.refreshToken,
+    hasAccessToken: !!token?.accessToken,
+  });
+
+  if (!token) {
+    console.warn(':: END-SESSION-URL - No token found, redirecting to login');
+    const NEXTAUTH_URL = process.env.NEXTAUTH_URL || '';
+    const basePath = process.env.IGRP_APP_BASE_PATH || '';
+    const loginUrl = '/login';
+    return NextResponse.json({ url: `${NEXTAUTH_URL}${basePath}${loginUrl}` }, { status: 200 });
+  }
 
   try {
     const url = await buildKeycloakEndSessionUrl(token);
+    console.log(':: END-SESSION-URL - Success, URL:', url);
     return NextResponse.json({ url });
   } catch (e) {
-    console.error(e);
+    console.error(':: END-SESSION-URL - Error:', e);
     const NEXTAUTH_URL = process.env.NEXTAUTH_URL || '';
     const basePath = process.env.IGRP_APP_BASE_PATH || '';
     const loginUrl = '/login';

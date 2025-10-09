@@ -1,7 +1,6 @@
 import type { NextAuthOptions, Session, TokenSet } from '@igrp/framework-next-auth';
 import type { JWT } from '@igrp/framework-next-auth/jwt';
 import KeycloakProvider from 'next-auth/providers/keycloak';
-import { redirect as nextRedirect } from 'next/navigation';
 
 const isProd = process.env.NODE_ENV === 'production';
 const baseUrl = process.env.NEXTAUTH_URL ?? '';
@@ -41,9 +40,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async redirect({ url, baseUrl }) {
       const basePath = process.env.IGRP_APP_BASE_PATH || '';
-      
+
       console.log(':: AUTH REDIRECT DEBUG ::', { url, baseUrl, basePath });
-      
+
       // Handle relative paths
       if (url.startsWith('/')) return `${baseUrl}${basePath}${url}`;
 
@@ -61,12 +60,12 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token, user, account, profile }) {
       if (account) {
-        console.log(':: JWT CALLBACK - NEW SIGN IN ::', { 
-          hasUser: !!user, 
+        console.log(':: JWT CALLBACK - NEW SIGN IN ::', {
+          hasUser: !!user,
           hasAccount: !!account,
-          provider: account.provider 
+          provider: account.provider,
         });
-        
+
         if (user && !('user' in token)) {
           token.user = {
             id: token.sub ?? user.id ?? undefined,
@@ -161,31 +160,52 @@ export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
   const issuer = process.env.KEYCLOAK_ISSUER;
   if (!issuer) throw new Error('KEYCLOAK_ISSUER not set');
 
-  const loginUrl = '/login';
-  const basePath = process.env.IGRP_APP_BASE_PATH || '';
-  const postLogoutRedirectUri = process.env.NEXTAUTH_URL
-    ? `${process.env.NEXTAUTH_URL}${basePath}${loginUrl}`
-    : undefined;
-
   // Build URL safely - issuer is already checked above
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
-  
+
   // Get fresh id_token for logout
+  let idToken: string | undefined;
+
   if (jwt?.refreshToken) {
     try {
+      console.log(':: LOGOUT - Fetching fresh id_token with refresh token');
       const response = await requestRefreshOfAccessToken(jwt);
-      const tokens: TokenSet = await response.json();
-      if (response.ok && tokens.id_token) {
-        url.searchParams.set('id_token_hint', tokens.id_token);
+
+      if (response.ok) {
+        const tokens: TokenSet = await response.json();
+        idToken = tokens.id_token;
+        console.log(':: LOGOUT - Got id_token:', !!idToken);
+      } else {
+        const errorText = await response.text();
+        console.error(':: LOGOUT - Failed to get id_token:', response.status, errorText);
       }
     } catch (error) {
-      console.error('Error getting id_token for logout:', error);
+      console.error(':: LOGOUT - Error getting id_token for logout:', error);
     }
-  }
-  
-  if (postLogoutRedirectUri) {
-    url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
+  } else {
+    console.warn(':: LOGOUT - No refresh token available for logout');
   }
 
+  if (idToken) {
+    url.searchParams.set('id_token_hint', idToken);
+  } else {
+    console.warn(':: LOGOUT - No id_token available, logout may not work properly on Keycloak');
+  }
+
+  // TEMPORARY: Removed post_logout_redirect_uri because it's not configured in Keycloak
+  // To enable automatic redirect after logout, configure in Keycloak:
+  // Clients -> access-management -> Settings -> Valid Post Logout Redirect URIs
+  // Add: http://localhost:3000/* and your production URL
+  
+  // const loginUrl = '/login';
+  // const basePath = process.env.IGRP_APP_BASE_PATH || '';
+  // const postLogoutRedirectUri = process.env.NEXTAUTH_URL
+  //   ? `${process.env.NEXTAUTH_URL}${basePath}${loginUrl}`
+  //   : undefined;
+  // if (postLogoutRedirectUri) {
+  //   url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
+  // }
+
+  console.log(':: LOGOUT URL:', url.toString());
   return url.toString();
 }
