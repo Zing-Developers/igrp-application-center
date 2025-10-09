@@ -243,8 +243,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email ?? profile?.email ?? null,
           };
         }
-        // Store all tokens (keeping idToken for compatibility)
-        token.idToken = account.id_token;
+        // Store only accessToken and refreshToken (no idToken to reduce size)
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
@@ -252,7 +251,6 @@ export const authOptions: NextAuthOptions = {
         delete token.error;
 
         console.log(':: JWT CALLBACK - Token created:', {
-          hasIdToken: !!token.idToken,
           hasAccessToken: !!token.accessToken,
           hasRefreshToken: !!token.refreshToken,
           expiresAt: token.expiresAt,
@@ -285,7 +283,6 @@ export const authOptions: NextAuthOptions = {
         const updatedToken: JWT = {
           ...token,
           user: token.user,
-          idToken: tokens.id_token,
           accessToken: tokens.access_token,
           expiresAt: Math.floor(Date.now() / 1000 + Number(tokens.expires_in)),
           refreshToken: tokens.refresh_token || token.refreshToken,
@@ -302,13 +299,11 @@ export const authOptions: NextAuthOptions = {
         hasToken: !!token,
         hasUser: !!token?.user,
         hasAccessToken: !!token?.accessToken,
-        hasIdToken: !!token?.idToken,
         hasError: !!token?.error,
       });
 
       session.user = token.user as Session['user'];
       session.accessToken = token.accessToken;
-      session.idToken = token.idToken;
       session.error = token.error;
       session.expiresAt = token.expiresAt;
       return session;
@@ -355,15 +350,33 @@ export async function buildKeycloakEndSessionUrl(jwt: JWT): Promise<string> {
   // Build URL safely - issuer is already checked above
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
 
-  // Use idToken directly from JWT
-  const idToken = jwt?.idToken as string | undefined;
+  // Get fresh id_token from refresh token (since we don't store it to reduce JWT size)
+  let idToken: string | undefined;
 
-  console.log(':: LOGOUT - Has idToken:', !!idToken);
+  if (jwt?.refreshToken) {
+    try {
+      console.log(':: LOGOUT - Fetching fresh id_token from Keycloak');
+      const response = await requestRefreshOfAccessToken(jwt);
+
+      if (response.ok) {
+        const tokens: TokenSet = await response.json();
+        idToken = tokens.id_token;
+        console.log(':: LOGOUT - Got fresh id_token:', !!idToken);
+      } else {
+        const errorText = await response.text();
+        console.error(':: LOGOUT - Failed to get id_token:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error(':: LOGOUT - Error getting id_token:', error);
+    }
+  } else {
+    console.warn(':: LOGOUT - No refresh token available');
+  }
 
   if (idToken) {
     url.searchParams.set('id_token_hint', idToken);
   } else {
-    console.warn(':: LOGOUT - No id_token available, logout may not work properly on Keycloak');
+    console.warn(':: LOGOUT - No id_token available, logout may not work properly');
   }
 
   // TEMPORARY: Removed post_logout_redirect_uri because it's not configured in Keycloak
