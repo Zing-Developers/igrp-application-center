@@ -1,0 +1,157 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - cloud-dev
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'k8s/**'
+      - '.gitattributes'
+
+env:
+  DISCORD_WEBHOOK_URL: https://discord.com/api/webhooks/1425673583837053140/EI5l4JbtOFm3bQ8c8HG984ePvodVzuQeBQMGKJAFA2jtcooOPYXRCFHfE7rojeuxz7hT
+  REPO_NAME: ${{ github.repository }}
+  BRANCH_NAME: ${{ github.ref_name }}
+  GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  GITHUB_RUN_ID: ${{ github.run_id }}
+  ROLE_ID: "1422917237320450048"
+  SERVER_IP: "46.62.156.35"
+  K8S_NAMESPACE: igrp-application-center-frontend
+  K8S_DEPLOYMENT_NAME: igrp-application-center-frontend
+  DOCKER_REGISTRY_ENV: dev
+  DOCKER_HUB_IMAGE_TAG: igrp-application-center-with-basepath
+
+jobs:
+  pre-deploy:
+    name: Send Discord Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Discord Notification
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%s | sed 's/"/\\"/g')
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+
+          curl -H "Content-Type: application/json" -X POST -d "{
+            \"content\": \"<@&${ROLE_ID}>\",
+            \"allowed_mentions\": {\"roles\": [\"${ROLE_ID}\"]},
+            \"embeds\": [
+              {
+                \"title\": \"${REPO_NAME}\nRun ID: ${GITHUB_RUN_ID}\",
+                \"description\": \":hourglass_flowing_sand: DEPLOYMENT STARTED\n\n:herb: Branch: ${BRANCH_NAME}\n:bust_in_silhouette: Author: ${COMMIT_AUTHOR}\n:memo: Commit: ${COMMIT_MESSAGE}\n\n[View Workflow Run](${GITHUB_RUN_URL})\",
+                \"color\": 3447003
+              }
+            ]
+          }" $DISCORD_WEBHOOK_URL
+
+  build_and_push: 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker  # Switching to the Docker driver
+
+      - name: Add custom CA certificate
+        run: |
+          echo "${{ secrets.DOCKER_REPO_CERT }}" | sudo tee /etc/ssl/certs/repo-ca.crt
+          sudo update-ca-certificates
+          sudo mkdir -p /etc/docker/certs.d/docker-repo.zingaistudio.com
+          sudo cp /etc/ssl/certs/repo-ca.crt /etc/docker/certs.d/docker-repo.zingaistudio.com/ca.crt
+          sudo systemctl restart docker
+
+      - name: Login to Nexus Sonatype
+        uses: docker/login-action@v3
+        with:
+          username: admin
+          password: nexusadmin 
+          registry: docker-repo.zingaistudio.com
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: irnzing
+          password: 'IRNZ2025##'
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          tags: | 
+            docker-repo.zingaistudio.com/${{ env.K8S_DEPLOYMENT_NAME }}/${{ env.K8S_DEPLOYMENT_NAME }}-${{ env.DOCKER_REGISTRY_ENV }}:latest
+            irnzing/irn:${{ env.DOCKER_HUB_IMAGE_TAG }} 
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3   
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.BASTION_SSH }}
+            
+      - name: Copy Kubernetes YAML files to server
+        run: scp -o StrictHostKeyChecking=no k8s/configmap.yaml k8s/deployment.yaml k8s/service.yaml k8s/ingress.yaml root@${{ env.SERVER_IP }}:/tmp
+
+      - name: Apply Kubernetes Manifests on Remote Server
+        run: |
+          ssh -o StrictHostKeyChecking=no root@${{ env.SERVER_IP }} << EOF
+            export K8S_DEPLOYMENT_NAME="${{ env.K8S_DEPLOYMENT_NAME }}"
+            export K8S_NAMESPACE="${{ env.K8S_NAMESPACE }}"
+            cd /tmp
+            kubectl apply -f configmap.yaml
+            kubectl apply -f deployment.yaml
+            kubectl apply -f service.yaml
+            kubectl apply -f ingress.yaml
+            kubectl rollout restart deployment $K8S_DEPLOYMENT_NAME -n $K8S_NAMESPACE
+          EOF
+
+  notify:
+    name: Notify Discord on Workflow Status
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build_and_push, deploy]  # depends on all previous jobs
+    if: always()  # runs even if a previous job failed
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Send Discord Notification
+        run: |
+          if [ "${{ needs.pre-deploy.result }}" != "success" ] || \
+             [ "${{ needs.build_and_push.result }}" != "success" ] || \
+             [ "${{ needs.deploy.result }}" != "success" ]; then
+            COLOR=15158332
+            EMOJI=":red_circle:"
+            MESSAGE="DEPLOY FAILED!"
+          else
+            COLOR=3066993
+            EMOJI=":green_circle:"
+            MESSAGE="DEPLOY SUCCEEDED!"
+          fi
+
+          COMMIT_MESSAGE=$(git log -1 --pretty=%s | sed 's/"/\\"/g')
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+
+          curl -H "Content-Type: application/json" -X POST -d "{
+            \"content\": \"<@&${ROLE_ID}>\",
+            \"embeds\": [
+              {
+                \"title\": \"${REPO_NAME}\nRun ID: ${GITHUB_RUN_ID}\",
+                \"description\": \"${EMOJI} ${MESSAGE}\n\n:herb: Branch: ${BRANCH_NAME}\n:bust_in_silhouette: Author: ${COMMIT_AUTHOR}\n:memo: Commit: ${COMMIT_MESSAGE}\n[View Workflow Run](${GITHUB_RUN_URL})\",
+                \"color\": ${COLOR}
+              }
+            ]
+          }" $DISCORD_WEBHOOK_URL
